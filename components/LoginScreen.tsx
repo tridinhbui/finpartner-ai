@@ -1,19 +1,120 @@
 
-import React, { useState } from 'react';
-import { BarChart3, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, Loader2, CheckCircle2 } from 'lucide-react';
+
+// Declare Google Identity Services global
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: any) => void;
+          renderButton: (parent: HTMLElement, options: any) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }
+}
+
+interface UserProfile {
+  name: string;
+  email: string;
+  role?: string;
+  avatarUrl?: string;
+}
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: (userProfile?: UserProfile) => void;
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [googleLoaded, setGoogleLoaded] = useState(false);
+  const buttonRef = React.useRef<HTMLDivElement>(null);
 
-  const handleGoogleLogin = () => {
+  useEffect(() => {
+    // Load Google Identity Services script
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      console.log('Google Identity Services loaded');
+      setGoogleLoaded(true);
+      initializeGoogleSignIn();
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  const initializeGoogleSignIn = () => {
+    if (window.google && buttonRef.current) {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      console.log('Initializing Google Sign-In with client ID:', clientId);
+      
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleCredentialResponse,
+        auto_select: false,
+      });
+
+      // Render the Google Sign-In button
+      window.google.accounts.id.renderButton(
+        buttonRef.current,
+        {
+          theme: 'outline',
+          size: 'large',
+          width: buttonRef.current.offsetWidth,
+          text: 'continue_with',
+          shape: 'rectangular',
+        }
+      );
+    }
+  };
+
+  const handleCredentialResponse = (response: any) => {
+    console.log('Google Sign-In successful');
     setIsLoading(true);
-    // Simulate API delay
+    
+    // Decode JWT token to get user info
+    try {
+      const payload = JSON.parse(atob(response.credential.split('.')[1]));
+      console.log('User info from Google:', payload);
+      
+      // Create user profile from Google data
+      const userProfile: UserProfile = {
+        name: payload.name || 'User',
+        email: payload.email || '',
+        role: 'Analyst',
+        avatarUrl: payload.picture || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+      };
+      
+      setTimeout(() => {
+        onLogin(userProfile);
+        setIsLoading(false);
+      }, 500);
+    } catch (e) {
+      console.error('Error parsing token:', e);
+      // Fallback to mock login if parsing fails
+      setTimeout(() => {
+        onLogin();
+        setIsLoading(false);
+      }, 500);
+    }
+  };
+
+  const handleManualLogin = () => {
+    setIsLoading(true);
+    console.log('Manual login - bypassing Google OAuth');
     setTimeout(() => {
       onLogin();
+      setIsLoading(false);
     }, 1500);
   };
 
@@ -34,19 +135,38 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         </div>
 
         <div className="space-y-4">
+          {/* Google Sign-In Button Container */}
+          <div 
+            ref={buttonRef} 
+            className="w-full flex items-center justify-center"
+            style={{ minHeight: '48px' }}
+          ></div>
+
+          {/* Fallback Manual Login Button */}
+          {!googleLoaded && (
+            <button 
+              onClick={handleManualLogin}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium py-3 px-4 rounded-xl transition-all shadow-sm hover:shadow-md disabled:opacity-70 group"
+            >
+              {isLoading ? (
+                 <Loader2 size={20} className="animate-spin text-blue-600" />
+              ) : (
+                 <>
+                   <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+                   <span>Continue with Google</span>
+                 </>
+              )}
+            </button>
+          )}
+          
+          {/* Quick Demo Login Button */}
           <button 
-            onClick={handleGoogleLogin}
+            onClick={handleManualLogin}
             disabled={isLoading}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium py-3 px-4 rounded-xl transition-all shadow-sm hover:shadow-md disabled:opacity-70 group"
+            className="w-full text-sm text-slate-500 hover:text-slate-700 py-2 transition-colors"
           >
-            {isLoading ? (
-               <Loader2 size={20} className="animate-spin text-blue-600" />
-            ) : (
-               <>
-                 <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
-                 <span>Continue with Google</span>
-               </>
-            )}
+            {isLoading ? 'Signing in...' : 'Or continue without Google (Demo)'}
           </button>
           
           <div className="relative flex py-2 items-center">

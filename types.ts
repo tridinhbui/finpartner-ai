@@ -39,7 +39,7 @@ export interface Message {
   relatedTable?: TableConfig;
 }
 
-export type WorkspaceTab = 'chart' | 'table' | 'document';
+export type WorkspaceTab = 'chart' | 'table' | 'document' | 'excel';
 
 export interface WorkspaceState {
   activeTab: WorkspaceTab;
@@ -49,6 +49,7 @@ export interface WorkspaceState {
   documentData: string | null; // Base64
   documentMimeType: string | null;
   documentUrl?: string | null; // Blob URL for efficient preview
+  excelData?: any[] | null; // Parsed Excel data
 }
 
 export interface UserProfile {
@@ -59,3 +60,17 @@ export interface UserProfile {
 }
 
 export type Theme = 'light' | 'dark';
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+  workspace?: WorkspaceState;
+  highlightedNumbers?: Array<{
+    value: string;
+    label: string;
+    color: string;
+  }>;
+}

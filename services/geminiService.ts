@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, FunctionDeclaration, Type, Tool } from "@google/genai";
+import { GoogleGenAI, FunctionDeclaration } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 import { ChartConfig, TableConfig } from "../types";
 
@@ -7,23 +7,23 @@ import { ChartConfig, TableConfig } from "../types";
 const renderChartTool: FunctionDeclaration = {
   name: "renderChart",
   description: "Render a financial chart (bar, line, area) on the user dashboard. Use this when the user asks to visualize data or when you analyze a PDF/Table and find trends.",
-  parameters: {
-    type: Type.OBJECT,
+  parametersJsonSchema: {
+    type: "object",
     properties: {
-      title: { type: Type.STRING, description: "Title of the chart" },
-      type: { type: Type.STRING, enum: ["bar", "line", "area", "composed"], description: "Type of chart" },
-      xAxisKey: { type: Type.STRING, description: "Key in data objects to use for X-axis (e.g., 'month', 'quarter')" },
+      title: { type: "string", description: "Title of the chart" },
+      type: { type: "string", enum: ["bar", "line", "area", "composed"], description: "Type of chart" },
+      xAxisKey: { type: "string", description: "Key in data objects to use for X-axis (e.g., 'month', 'quarter')" },
       dataKeys: { 
-        type: Type.ARRAY, 
-        items: { type: Type.STRING }, 
+        type: "array", 
+        items: { type: "string" }, 
         description: "Array of keys to plot values for (e.g., ['Revenue', 'Cost'])" 
       },
       data: {
-        type: Type.ARRAY,
-        items: { type: Type.OBJECT },
+        type: "array",
+        items: { type: "object" },
         description: "Array of data objects. Example: [{'month': 'Jan', 'Revenue': 100}]"
       },
-      description: { type: Type.STRING, description: "Brief analysis of the chart data." }
+      description: { type: "string", description: "Brief analysis of the chart data." }
     },
     required: ["title", "type", "xAxisKey", "dataKeys", "data"],
   },
@@ -32,57 +32,76 @@ const renderChartTool: FunctionDeclaration = {
 const renderTableTool: FunctionDeclaration = {
   name: "renderTable",
   description: "Render a detailed financial table on the user dashboard. Use this to present structured data extracted from PDFs or generated from analysis.",
-  parameters: {
-    type: Type.OBJECT,
+  parametersJsonSchema: {
+    type: "object",
     properties: {
-      title: { type: Type.STRING, description: "Title of the table" },
+      title: { type: "string", description: "Title of the table" },
       columns: { 
-        type: Type.ARRAY, 
-        items: { type: Type.STRING },
+        type: "array", 
+        items: { type: "string" },
         description: "List of column headers"
       },
       rows: {
-        type: Type.ARRAY,
-        items: { type: Type.OBJECT },
+        type: "array",
+        items: { type: "object" },
         description: "List of row objects where keys match column headers generally"
       },
-      description: { type: Type.STRING, description: "Brief context for the table." }
+      description: { type: "string", description: "Brief context for the table." }
     },
     required: ["title", "columns", "rows"],
   },
 };
 
-const tools: Tool[] = [
-  { functionDeclarations: [renderChartTool, renderTableTool] }
-];
+const highlightKeyMetricsTool: FunctionDeclaration = {
+  name: "highlightKeyMetrics",
+  description: "Highlight important financial numbers extracted from PDF documents. Use this when analyzing financial statements to mark key metrics like Revenue, Net Income, EPS, etc.",
+  parametersJsonSchema: {
+    type: "object",
+    properties: {
+      metrics: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string", description: "Label of the metric (e.g., 'Revenue', 'Net Income')" },
+            value: { type: "string", description: "The value of the metric as shown in the document" },
+            color: { type: "string", description: "Hex color code for highlighting (e.g., '#3b82f6')" }
+          },
+          required: ["label", "value", "color"]
+        },
+        description: "Array of key metrics to highlight in the PDF"
+      }
+    },
+    required: ["metrics"],
+  },
+};
 
 // Service Class
 class GeminiService {
   private ai: GoogleGenAI;
-  private chatSession: any;
+  private chatHistory: any[];
   private apiKey: string;
 
   constructor() {
-    const key = process.env.API_KEY;
+    const key = import.meta.env.VITE_GEMINI_API_KEY;
     if (!key) {
-        console.error("API_KEY is missing");
+        console.error("VITE_GEMINI_API_KEY is missing in .env.local file");
+        console.log("Please add VITE_GEMINI_API_KEY to your .env.local file");
+    } else {
+        console.log("API Key loaded successfully");
     }
     this.apiKey = key || '';
     this.ai = new GoogleGenAI({ apiKey: this.apiKey });
+    this.chatHistory = [];
   }
 
   public async startChat() {
     try {
-      this.chatSession = this.ai.chats.create({
-        model: "gemini-2.5-flash",
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          tools: tools,
-          temperature: 0.4, // Slightly higher for natural/playful persona
-        },
-      });
+      console.log("Chat initialized");
+      this.chatHistory = [];
     } catch (e) {
-      console.error("Failed to start chat session", e);
+      console.error("Failed to initialize chat:", e);
+      throw e;
     }
   }
 
@@ -90,19 +109,17 @@ class GeminiService {
     message: string, 
     attachment: { mimeType: string; data: string } | null,
     onChartUpdate: (chart: ChartConfig) => void,
-    onTableUpdate: (table: TableConfig) => void
+    onTableUpdate: (table: TableConfig) => void,
+    onHighlightMetrics?: (metrics: Array<{ label: string; value: string; color: string }>) => void
   ): Promise<string> {
-    if (!this.chatSession) {
-      await this.startChat();
-    }
-
     try {
-      // Construct content. If attachment exists, it's a multipart message.
-      // Note: for chat.sendMessage, we pass the message/parts directly.
-      let content: any;
+      console.log("Sending message:", message.substring(0, 50) + "...");
+      
+      // Construct parts array for content
+      let parts: any[] = [];
 
       if (attachment) {
-        content = [
+        parts = [
           { text: message },
           {
             inlineData: {
@@ -112,22 +129,43 @@ class GeminiService {
           }
         ];
       } else {
-        content = message;
+        parts = [{ text: message }];
       }
 
-      const result = await this.chatSession.sendMessage(content);
+      // Add user message to history
+      this.chatHistory.push({
+        role: 'user',
+        parts: parts
+      });
+
+      // Generate content with history
+      const result = await this.ai.models.generateContent({
+        model: 'gemini-2.0-flash-exp',
+        contents: this.chatHistory,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          tools: [
+            {
+              functionDeclarations: [renderChartTool, renderTableTool, highlightKeyMetricsTool]
+            }
+          ],
+          temperature: 0.4,
+        }
+      });
       
-      // Handle Function Calls automatically
+      console.log("Received response from Gemini");
+      
+      // Handle Function Calls
       const functionCalls = result.functionCalls;
       
-      // Process tools
       if (functionCalls && functionCalls.length > 0) {
-        let toolResponseParts: any[] = [];
-
+        console.log("Processing function calls:", functionCalls.length);
+        
         for (const call of functionCalls) {
           const args = call.args;
           
           if (call.name === 'renderChart') {
+             console.log("Rendering chart:", args.title);
              const chartConfig: ChartConfig = {
                 title: args.title as string,
                 type: args.type as any,
@@ -137,14 +175,8 @@ class GeminiService {
                 description: args.description as string
              };
              onChartUpdate(chartConfig);
-             toolResponseParts.push({
-                functionResponse: {
-                    name: call.name,
-                    id: call.id,
-                    response: { result: "Chart rendered successfully on dashboard." }
-                }
-             });
           } else if (call.name === 'renderTable') {
+             console.log("Rendering table:", args.title);
              const tableConfig: TableConfig = {
                 title: args.title as string,
                 columns: args.columns as string[],
@@ -152,27 +184,31 @@ class GeminiService {
                 description: args.description as string
              };
              onTableUpdate(tableConfig);
-             toolResponseParts.push({
-                functionResponse: {
-                    name: call.name,
-                    id: call.id,
-                    response: { result: "Table rendered successfully on dashboard." }
-                }
-             });
+          } else if (call.name === 'highlightKeyMetrics' && onHighlightMetrics) {
+             console.log("Highlighting key metrics:", args.metrics);
+             onHighlightMetrics(args.metrics as Array<{ label: string; value: string; color: string }>);
           }
-        }
-
-        // Send the tool response back to Gemini to get the final text response
-        if (toolResponseParts.length > 0) {
-            const followUp = await this.chatSession.sendMessage(toolResponseParts);
-            return followUp.text || "Dashboard updated.";
         }
       }
 
-      return result.text || "";
-    } catch (error) {
+      const responseText = result.text || "";
+      
+      // Add model response to history
+      if (responseText) {
+        this.chatHistory.push({
+          role: 'model',
+          parts: [{ text: responseText }]
+        });
+      }
+
+      return responseText;
+    } catch (error: any) {
       console.error("Error sending message:", error);
-      return "Hệ thống đang nghẽn một chút, anh Trí chờ em một giây rồi thử lại nhé!";
+      console.error("Error details:", error.message, error.stack);
+      if (error.message) {
+        console.error("Error message:", error.message);
+      }
+      return "Hệ thống đang nghẽn một chút, anh Trí chờ em một giây rồi thử lại nhé! Error: " + (error.message || "Unknown");
     }
   }
 }
