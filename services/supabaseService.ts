@@ -2,10 +2,34 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ChatThread, Message } from '../types';
 
 // Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder_key';
 
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+// Check if Supabase is properly configured
+const isSupabaseConfigured = 
+  supabaseUrl !== 'https://placeholder.supabase.co' && 
+  supabaseAnonKey !== 'placeholder_key' &&
+  !supabaseUrl.includes('placeholder') &&
+  !supabaseAnonKey.includes('placeholder');
+
+// Create client only if properly configured, otherwise use mock client
+let supabase: SupabaseClient;
+
+try {
+  if (isSupabaseConfigured) {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    console.log('✅ Supabase connected');
+  } else {
+    console.warn('⚠️ Supabase not configured - using localStorage only');
+    // Create a mock client that won't crash
+    supabase = createClient('https://mock.supabase.co', 'mock_key');
+  }
+} catch (error) {
+  console.error('❌ Supabase initialization failed:', error);
+  supabase = createClient('https://mock.supabase.co', 'mock_key');
+}
+
+export { supabase };
 
 // Database Service
 class SupabaseService {
@@ -13,6 +37,11 @@ class SupabaseService {
   // ==================== CHAT THREADS ====================
   
   async saveThread(thread: ChatThread, userId: string): Promise<void> {
+    if (!isSupabaseConfigured) {
+      console.log('💾 Supabase not configured - skipping cloud save');
+      return;
+    }
+    
     try {
       const { error } = await supabase
         .from('chat_threads')
@@ -34,6 +63,11 @@ class SupabaseService {
   }
 
   async loadThreads(userId: string): Promise<ChatThread[]> {
+    if (!isSupabaseConfigured) {
+      console.log('💾 Supabase not configured - returning empty array');
+      return [];
+    }
+    
     try {
       const { data, error } = await supabase
         .from('chat_threads')
