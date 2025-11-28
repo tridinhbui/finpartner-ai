@@ -53,7 +53,7 @@
 Cập nhật file `.env.local`:
 
 ```env
-VITE_GEMINI_API_KEY=AIzaSyDHclclZU5bTLlLRf4ALoAGQJs_g8F2eUY
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
 VITE_GOOGLE_CLIENT_ID=336038131508-c46if7971orgluv3m65noiv58e0o14et.apps.googleusercontent.com
 VITE_SUPABASE_URL=https://xxxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
