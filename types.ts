@@ -46,10 +46,12 @@ export interface WorkspaceState {
   chartData: ChartConfig | null;
   tableData: TableConfig | null;
   documentName: string | null;
-  documentData: string | null; // Base64
+  documentData: string | null; // Base64 - MUST persist this
   documentMimeType: string | null;
-  documentUrl?: string | null; // Blob URL for efficient preview
+  documentUrl?: string | null; // Blob URL - will be recreated on load
   excelData?: any[] | null; // Parsed Excel data
+  chartHistory?: ChartConfig[]; // Store multiple charts
+  tableHistory?: TableConfig[]; // Store multiple tables
 }
 
 export interface UserProfile {

@@ -160,36 +160,93 @@ const PDFViewerWithHighlight: React.FC<PDFViewerProps> = ({
           )}
         </div>
 
-        {/* Visual Highlight Markers on PDF */}
-        {showHighlights && highlightedNumbers.length > 0 && (
+        {/* Visual Highlight Markers with Arrows on PDF */}
+        {showHighlights && highlightedNumbers.length > 0 && showMetricsPanel && (
           <div className="absolute inset-0 pointer-events-none z-10">
-            {/* Visual markers - positioned randomly for demo, in real app would use PDF.js coordinates */}
-            {highlightedNumbers.slice(0, 5).map((item, idx) => (
-              <div
-                key={idx}
-                className="absolute animate-pulse"
-                style={{
-                  left: `${20 + (idx * 15)}%`,
-                  top: `${15 + (idx * 12)}%`,
-                  transform: 'translateX(-50%)'
-                }}
-              >
-                <div className="relative">
-                  {/* Highlight marker */}
-                  <div 
-                    className="w-32 h-8 rounded opacity-30"
-                    style={{ backgroundColor: item.color }}
-                  ></div>
-                  {/* Tooltip */}
-                  <div 
-                    className="absolute -top-8 left-0 bg-slate-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap shadow-lg"
-                    style={{ borderLeftColor: item.color, borderLeftWidth: '3px' }}
+            {/* Visual markers with connecting lines to metrics panel */}
+            {highlightedNumbers.slice(0, 6).map((item, idx) => {
+              const leftPos = 20 + (idx % 3) * 25; // 3 columns
+              const topPos = 20 + Math.floor(idx / 3) * 30; // Multiple rows
+              
+              return (
+                <div key={idx}>
+                  {/* Highlight Box on PDF */}
+                  <div
+                    className="absolute"
+                    style={{
+                      left: `${leftPos}%`,
+                      top: `${topPos}%`,
+                    }}
                   >
-                    {item.label}: {item.value}
+                    <div className="relative">
+                      {/* Pulsing highlight box */}
+                      <div 
+                        className="w-40 h-10 rounded-lg opacity-40 animate-pulse border-2"
+                        style={{ 
+                          backgroundColor: item.color,
+                          borderColor: item.color
+                        }}
+                      ></div>
+                      
+                      {/* Pin/Marker */}
+                      <div 
+                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full shadow-lg flex items-center justify-center animate-bounce"
+                        style={{ backgroundColor: item.color }}
+                      >
+                        <span className="text-white text-xs font-bold">{idx + 1}</span>
+                      </div>
+                      
+                      {/* Label badge */}
+                      <div 
+                        className="absolute -bottom-6 left-0 text-xs font-bold px-2 py-1 rounded shadow-md whitespace-nowrap"
+                        style={{ 
+                          backgroundColor: item.color,
+                          color: 'white'
+                        }}
+                      >
+                        {item.label}
+                      </div>
+
+                      {/* Arrow/Line pointing to metrics panel (SVG) */}
+                      <svg
+                        className="absolute left-full top-1/2 pointer-events-none"
+                        style={{
+                          width: '200px',
+                          height: '100px',
+                          marginLeft: '10px',
+                          marginTop: '-50px'
+                        }}
+                      >
+                        <defs>
+                          <marker
+                            id={`arrowhead-${idx}`}
+                            markerWidth="10"
+                            markerHeight="10"
+                            refX="9"
+                            refY="3"
+                            orient="auto"
+                          >
+                            <polygon
+                              points="0 0, 10 3, 0 6"
+                              fill={item.color}
+                            />
+                          </marker>
+                        </defs>
+                        <path
+                          d="M 0 50 Q 100 50, 190 50"
+                          stroke={item.color}
+                          strokeWidth="2"
+                          fill="none"
+                          strokeDasharray="5,5"
+                          markerEnd={`url(#arrowhead-${idx})`}
+                          opacity="0.6"
+                        />
+                      </svg>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -219,10 +276,18 @@ const PDFViewerWithHighlight: React.FC<PDFViewerProps> = ({
                 {highlightedNumbers.map((item, idx) => (
                   <div
                     key={idx}
-                    className="bg-slate-800 dark:bg-slate-800 rounded-lg p-3 border-l-4 hover:bg-slate-750 transition-colors"
+                    className="bg-slate-800 dark:bg-slate-800 rounded-lg p-3 border-l-4 hover:bg-slate-750 transition-colors relative"
                     style={{ borderLeftColor: item.color }}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    {/* Number Badge */}
+                    <div 
+                      className="absolute -left-3 top-2 w-6 h-6 rounded-full shadow-lg flex items-center justify-center font-bold text-white text-xs"
+                      style={{ backgroundColor: item.color }}
+                    >
+                      {idx + 1}
+                    </div>
+                    
+                    <div className="flex items-start justify-between gap-2 pl-2">
                       <div className="flex-1">
                         <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1">
                           {item.label}

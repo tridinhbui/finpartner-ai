@@ -92,8 +92,36 @@ function App() {
     const loadThreadsAsync = async () => {
       const loadedThreads = await loadThreadsFromStorage();
       if (loadedThreads.length > 0) {
-        setThreads(loadedThreads);
-        setActiveThreadId(loadedThreads[0].id);
+        // Recreate blob URLs for all threads with documents
+        const threadsWithBlobs = loadedThreads.map(thread => {
+          if (thread.workspace?.documentData && thread.workspace.documentMimeType) {
+            try {
+              const byteCharacters = atob(thread.workspace.documentData);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], { type: thread.workspace.documentMimeType });
+              const objectUrl = URL.createObjectURL(blob);
+              
+              return {
+                ...thread,
+                workspace: {
+                  ...thread.workspace,
+                  documentUrl: objectUrl
+                }
+              };
+            } catch (error) {
+              console.error('Error recreating blob for thread:', thread.id, error);
+              return thread;
+            }
+          }
+          return thread;
+        });
+        
+        setThreads(threadsWithBlobs);
+        setActiveThreadId(threadsWithBlobs[0].id);
       } else {
         // Create initial thread if none exist
         createNewThread();
@@ -208,7 +236,50 @@ function App() {
   };
 
   const selectThread = (threadId: string) => {
+    // Cleanup old blob URL
+    if (workspace.documentUrl) {
+      URL.revokeObjectURL(workspace.documentUrl);
+    }
+    
     setActiveThreadId(threadId);
+    
+    // Recreate blob URL for the new thread's document
+    const thread = threads.find(t => t.id === threadId);
+    if (thread?.workspace?.documentData && thread.workspace.documentMimeType) {
+      recreateBlobUrl(thread);
+    }
+  };
+
+  const recreateBlobUrl = (thread: ChatThread) => {
+    if (!thread.workspace?.documentData || !thread.workspace.documentMimeType) return;
+    
+    try {
+      // Convert base64 to blob
+      const byteCharacters = atob(thread.workspace.documentData);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: thread.workspace.documentMimeType });
+      const objectUrl = URL.createObjectURL(blob);
+      
+      // Update thread with new blob URL
+      const updatedThreads = threads.map(t =>
+        t.id === thread.id
+          ? {
+              ...t,
+              workspace: {
+                ...t.workspace!,
+                documentUrl: objectUrl
+              }
+            }
+          : t
+      );
+      setThreads(updatedThreads);
+    } catch (error) {
+      console.error('Error recreating blob URL:', error);
+    }
   };
 
   const deleteThread = (threadId: string) => {
