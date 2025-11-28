@@ -25,6 +25,17 @@ const PDFViewerWithHighlight: React.FC<PDFViewerProps> = ({
   const [showHighlights, setShowHighlights] = useState(true);
   const [showMetricsPanel, setShowMetricsPanel] = useState(true);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('📄 PDFViewer Props:', {
+      hasDocumentName: !!documentName,
+      hasDocumentUrl: !!documentUrl,
+      hasDocumentData: !!documentData,
+      documentMimeType,
+      highlightsCount: highlightedNumbers.length
+    });
+  }, [documentName, documentUrl, documentData, documentMimeType, highlightedNumbers]);
+
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 10, 200));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 10, 50));
 

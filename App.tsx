@@ -140,6 +140,60 @@ function App() {
     };
   }, [activeThreadId]);
 
+  // Recreate blob URL when switching threads
+  useEffect(() => {
+    const currentThread = threads.find(t => t.id === activeThreadId);
+    
+    if (!currentThread?.workspace?.documentData || !currentThread.workspace.documentMimeType) {
+      return;
+    }
+    
+    console.log('📄 Checking blob URL for thread:', activeThreadId);
+    
+    // Always recreate blob URL to ensure it's valid
+    try {
+      // Clean up old blob URL if exists
+      if (currentThread.workspace.documentUrl) {
+        URL.revokeObjectURL(currentThread.workspace.documentUrl);
+      }
+      
+      // Convert base64 to blob
+      const byteCharacters = atob(currentThread.workspace.documentData);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: currentThread.workspace.documentMimeType });
+      const objectUrl = URL.createObjectURL(blob);
+      
+      console.log('✅ Blob URL created for', currentThread.workspace.documentName || 'document');
+      
+      // Update thread with new blob URL
+      setThreads(prevThreads => 
+        prevThreads.map(t =>
+          t.id === activeThreadId
+            ? {
+                ...t,
+                workspace: {
+                  ...t.workspace!,
+                  documentUrl: objectUrl
+                }
+              }
+            : t
+        )
+      );
+      
+      // Cleanup when switching away or unmounting
+      return () => {
+        console.log('🧹 Cleaning up blob URL for thread:', activeThreadId);
+        URL.revokeObjectURL(objectUrl);
+      };
+    } catch (error) {
+      console.error('❌ Error recreating blob URL:', error);
+    }
+  }, [activeThreadId]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -236,50 +290,14 @@ function App() {
   };
 
   const selectThread = (threadId: string) => {
+    console.log('🔄 Switching to thread:', threadId);
+    
     // Cleanup old blob URL
     if (workspace.documentUrl) {
       URL.revokeObjectURL(workspace.documentUrl);
     }
     
     setActiveThreadId(threadId);
-    
-    // Recreate blob URL for the new thread's document
-    const thread = threads.find(t => t.id === threadId);
-    if (thread?.workspace?.documentData && thread.workspace.documentMimeType) {
-      recreateBlobUrl(thread);
-    }
-  };
-
-  const recreateBlobUrl = (thread: ChatThread) => {
-    if (!thread.workspace?.documentData || !thread.workspace.documentMimeType) return;
-    
-    try {
-      // Convert base64 to blob
-      const byteCharacters = atob(thread.workspace.documentData);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: thread.workspace.documentMimeType });
-      const objectUrl = URL.createObjectURL(blob);
-      
-      // Update thread with new blob URL
-      const updatedThreads = threads.map(t =>
-        t.id === thread.id
-          ? {
-              ...t,
-              workspace: {
-                ...t.workspace!,
-                documentUrl: objectUrl
-              }
-            }
-          : t
-      );
-      setThreads(updatedThreads);
-    } catch (error) {
-      console.error('Error recreating blob URL:', error);
-    }
   };
 
   const deleteThread = (threadId: string) => {
